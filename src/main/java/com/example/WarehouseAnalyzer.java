@@ -145,26 +145,51 @@ class WarehouseAnalyzer {
      * @param standardDeviations threshold in standard deviations (e.g., 2.0)
      * @return list of products considered outliers
      */
+
+    /**
+    * Fix this silly little algorithm so it actually finds outliers properly (e.g. sort products, find mean properly, locate outliers)
+     * Tips from the coach: use Interquartile Range (IQR) to separate outliers...
+    * */
     public List<Product> findPriceOutliers(double standardDeviations) {
         List<Product> products = warehouse.getProducts();
         int n = products.size();
         if (n == 0) return List.of();
-        double sum = products.stream().map(Product::price).mapToDouble(bd -> bd.doubleValue()).sum();
-        double mean = sum / n;
-        double variance = products.stream()
+
+        List<Product> productsSorted = new ArrayList<>(products);
+        productsSorted.sort(Comparator.comparing(Product::price));
+
+        int q1End = n / 4;
+        int q3Start = n / 4;  // Q2 starts here
+        int q3End = q3Start + n / 2; // Q3 ends here
+
+        List<Product> q2q3 = productsSorted.subList(q3Start, q3End);
+
+        double meanQ2Q3 = q2q3.stream()
                 .map(Product::price)
-                .mapToDouble(bd -> Math.pow(bd.doubleValue() - mean, 2))
-                .sum() / n;
+                .mapToDouble(BigDecimal::doubleValue)
+                .average()
+                .orElse(0.0);
+
+        double variance = q2q3.stream()
+                .map(Product::price)
+                .mapToDouble(bd -> Math.pow(bd.doubleValue() - meanQ2Q3, 2))
+                .average()
+                .orElse(0.0);
         double std = Math.sqrt(variance);
+
         double threshold = standardDeviations * std;
+
         List<Product> outliers = new ArrayList<>();
         for (Product p : products) {
-            double diff = Math.abs(p.price().doubleValue() - mean);
-            if (diff > threshold) outliers.add(p);
+            double diff = Math.abs(p.price().doubleValue() - meanQ2Q3);
+            if (diff > threshold) {
+                outliers.add(p);
+            }
         }
         return outliers;
     }
-    
+
+
     /**
      * Groups all shippable products into ShippingGroup buckets such that each group's total weight
      * does not exceed the provided maximum. The goal is to minimize the number of groups and/or total
