@@ -150,44 +150,61 @@ class WarehouseAnalyzer {
     * Fix this silly little algorithm so it actually finds outliers properly (e.g. sort products, find mean properly, locate outliers)
      * Tips from the coach: use Interquartile Range (IQR) to separate outliers...
     * */
+
     public List<Product> findPriceOutliers(double standardDeviations) {
         List<Product> products = warehouse.getProducts();
         int n = products.size();
         if (n == 0) return List.of();
 
-        List<Product> productsSorted = new ArrayList<>(products);
-        productsSorted.sort(Comparator.comparing(Product::price));
-
-        int q1End = n / 4;
-        int q3Start = n / 4;  // Q2 starts here
-        int q3End = q3Start + n / 2; // Q3 ends here
-
-        List<Product> q2q3 = productsSorted.subList(q3Start, q3End);
-
-        double meanQ2Q3 = q2q3.stream()
+        double[] prices = products.stream()
                 .map(Product::price)
                 .mapToDouble(BigDecimal::doubleValue)
-                .average()
-                .orElse(0.0);
+                .toArray();
 
-        double variance = q2q3.stream()
-                .map(Product::price)
-                .mapToDouble(bd -> Math.pow(bd.doubleValue() - meanQ2Q3, 2))
-                .average()
-                .orElse(0.0);
-        double std = Math.sqrt(variance);
+        double[] sorted = Arrays.copyOf(prices, prices.length);
+        Arrays.sort(sorted);
 
-        double threshold = standardDeviations * std;
+        double median;
+        if (n % 2 == 1) {
+            median = sorted[n / 2];
+        } else {
+            median = (sorted[n / 2 - 1] + sorted[n / 2]) / 2.0;
+        }
+
+        double[] absDevs = Arrays.stream(prices)
+                .map(p -> Math.abs(p - median))
+                .toArray();
+        Arrays.sort(absDevs);
+
+        double mad;
+        if (n % 2 == 1) {
+            mad = absDevs[n / 2];
+        } else {
+            mad = (absDevs[n / 2 - 1] + absDevs[n / 2]) / 2.0;
+        }
+
+        final double MAD_TO_STD = 1.4826;
+        double approxStd = mad * MAD_TO_STD;
+
+        if (approxStd == 0.0) {
+            double mean = Arrays.stream(prices).average().orElse(0.0);
+            double var = Arrays.stream(prices).map(p -> (p - mean) * (p - mean)).sum() / n;
+            approxStd = Math.sqrt(var);
+            if (approxStd == 0.0) return List.of(); // truly all identical
+        }
+
+        double threshold = standardDeviations * approxStd;
 
         List<Product> outliers = new ArrayList<>();
         for (Product p : products) {
-            double diff = Math.abs(p.price().doubleValue() - meanQ2Q3);
-            if (diff > threshold) {
+            double price = p.price().doubleValue();
+            if (Math.abs(price - median) > threshold) {
                 outliers.add(p);
             }
         }
         return outliers;
     }
+
 
 
 
