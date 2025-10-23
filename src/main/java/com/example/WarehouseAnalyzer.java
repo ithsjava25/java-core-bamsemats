@@ -159,9 +159,8 @@ class WarehouseAnalyzer {
         productsSorted.sort(Comparator.comparing(Product::price));
 
         int q1End = n / 4;
-        int q3Start = n / 4;  // Q2 starts here
-        int q3End = q3Start + n / 2; // Q3 ends here
-
+        int q3Start = q1End;
+        int q3End = q3Start + n / 2;
         List<Product> q2q3 = productsSorted.subList(q3Start, q3End);
 
         double meanQ2Q3 = q2q3.stream()
@@ -170,9 +169,15 @@ class WarehouseAnalyzer {
                 .average()
                 .orElse(0.0);
 
-        double variance = q2q3.stream()
+        double populationMean = products.stream()
                 .map(Product::price)
-                .mapToDouble(bd -> Math.pow(bd.doubleValue() - meanQ2Q3, 2))
+                .mapToDouble(BigDecimal::doubleValue)
+                .average()
+                .orElse(0.0);
+
+        double variance = products.stream()
+                .map(Product::price)
+                .mapToDouble(bd -> Math.pow(bd.doubleValue() - populationMean, 2))
                 .average()
                 .orElse(0.0);
         double std = Math.sqrt(variance);
@@ -188,6 +193,7 @@ class WarehouseAnalyzer {
         }
         return outliers;
     }
+
 
 
     /**
