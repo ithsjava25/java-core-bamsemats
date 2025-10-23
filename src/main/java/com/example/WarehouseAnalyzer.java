@@ -145,26 +145,70 @@ class WarehouseAnalyzer {
      * @param standardDeviations threshold in standard deviations (e.g., 2.0)
      * @return list of products considered outliers
      */
+
+    /**
+    * Fix this silly little algorithm so it actually finds outliers properly (e.g. sort products, find mean properly, locate outliers)
+     * Tips from the coach: use Interquartile Range (IQR) to separate outliers...
+    * */
+
     public List<Product> findPriceOutliers(double standardDeviations) {
         List<Product> products = warehouse.getProducts();
         int n = products.size();
         if (n == 0) return List.of();
-        double sum = products.stream().map(Product::price).mapToDouble(bd -> bd.doubleValue()).sum();
-        double mean = sum / n;
-        double variance = products.stream()
+
+        double[] prices = products.stream()
                 .map(Product::price)
-                .mapToDouble(bd -> Math.pow(bd.doubleValue() - mean, 2))
-                .sum() / n;
-        double std = Math.sqrt(variance);
-        double threshold = standardDeviations * std;
+                .mapToDouble(BigDecimal::doubleValue)
+                .toArray();
+
+        double[] sorted = Arrays.copyOf(prices, prices.length);
+        Arrays.sort(sorted);
+
+        double median;
+        if (n % 2 == 1) {
+            median = sorted[n / 2];
+        } else {
+            median = (sorted[n / 2 - 1] + sorted[n / 2]) / 2.0;
+        }
+
+        double[] absDevs = Arrays.stream(prices)
+                .map(p -> Math.abs(p - median))
+                .toArray();
+        Arrays.sort(absDevs);
+
+        double mad;
+        if (n % 2 == 1) {
+            mad = absDevs[n / 2];
+        } else {
+            mad = (absDevs[n / 2 - 1] + absDevs[n / 2]) / 2.0;
+        }
+
+        final double MAD_TO_STD = 1.4826;
+        double approxStd = mad * MAD_TO_STD;
+
+        if (approxStd == 0.0) {
+            double mean = Arrays.stream(prices).average().orElse(0.0);
+            double var = Arrays.stream(prices).map(p -> (p - mean) * (p - mean)).sum() / n;
+            approxStd = Math.sqrt(var);
+            if (approxStd == 0.0) return List.of(); // truly all identical
+        }
+
+        double threshold = standardDeviations * approxStd;
+
         List<Product> outliers = new ArrayList<>();
         for (Product p : products) {
-            double diff = Math.abs(p.price().doubleValue() - mean);
-            if (diff > threshold) outliers.add(p);
+            double price = p.price().doubleValue();
+            if (Math.abs(price - median) > threshold) {
+                outliers.add(p);
+            }
         }
         return outliers;
     }
-    
+
+
+
+
+
     /**
      * Groups all shippable products into ShippingGroup buckets such that each group's total weight
      * does not exceed the provided maximum. The goal is to minimize the number of groups and/or total
